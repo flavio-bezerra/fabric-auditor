@@ -8,7 +8,12 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests",
-        "openai",
-        "langchain",
+        "langchain-community==0.3.20",
+        "sentence-transformers==4.0.1",
+        "azure-core==1.31.0",
+        "fsspec==2024.3.1",
+        "filelock==3.11.0",
+        "threadpoolctl==3.6.0",
+        "openai==1.93.3",
     ],
 )

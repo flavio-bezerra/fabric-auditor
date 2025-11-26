@@ -31,7 +31,8 @@ class FabricAuditor:
             "audit_code",
             "summarize_notebook",
             "mssparkutils.credentials.getToken",
-            "trident.workspace.id"
+            "trident.workspace.id",
+            "# AUDIT_IGNORE"  # Marcador manual para ignorar células
         ]
 
     def _get_fabric_context(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
