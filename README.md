@@ -24,14 +24,14 @@ Você pode instalar diretamente na sessão do notebook usando `%pip` apontando p
 
 **Repositório Público:**
 ```python
-%pip install git+https://github.com/SEU_USUARIO/fabric-auditor.git
+%pip install git+https://github.com/flavio-bezerra/fabric-auditor.git
 ```
 
 **Repositório Privado (com Token):**
 Se o repositório for privado, você precisará de um Personal Access Token (PAT).
 ```python
 # Exemplo com GitHub
-%pip install git+https://SEU_TOKEN@github.com/SEU_USUARIO/fabric-auditor.git
+%pip install git+https://SEU_TOKEN@github.com/flavio-bezerra/fabric-auditor.git
 ```
 
 ### Opção 2: Instalação via Environment (Produção)
