@@ -15,5 +15,7 @@ setup(
         "filelock==3.11.0",
         "threadpoolctl==3.6.0",
         "openai==1.93.3",
+        "azure-identity",
+        "azure-keyvault-secrets",
     ],
 )

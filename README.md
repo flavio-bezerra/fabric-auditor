@@ -46,9 +46,43 @@ Para disponibilizar a biblioteca em todos os notebooks de um Workspace:
 
 ---
 
-## 🛠️ Como Usar
+## 🚀 Uso Rápido (Configuração Automática)
 
-Aqui está um exemplo completo de como configurar o modelo (usando Azure OpenAI) e rodar a auditoria.
+Se você já possui o ambiente configurado com o arquivo de credenciais padrão, a biblioteca se configura automaticamente:
+
+```python
+from fabric_auditor import FabricAuditor
+
+# Inicializa sem argumentos -> Tenta ler JSON e KeyVault automaticamente
+auditor = FabricAuditor()
+
+# Executa a auditoria
+print("🔍 Auditoria:")
+print(auditor.audit_code())
+
+# Gera o resumo
+print("\n📝 Resumo:")
+print(auditor.summarize_notebook())
+```
+
+### Pré-requisitos para Uso Rápido
+Para que a configuração automática funcione, você precisa ter:
+1.  Um arquivo JSON em: `{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json`
+2.  O JSON deve seguir este formato:
+    ```json
+    {
+        "tenant_id": "...",
+        "client_id": "...",
+        "client_secret": "..."
+    }
+    ```
+3.  As bibliotecas `azure-identity` e `azure-keyvault-secrets` instaladas.
+
+---
+
+## 🛠️ Como Usar (Configuração Manual)
+
+Aqui está um exemplo completo de como configurar o modelo manualmente (usando Azure OpenAI) e rodar a auditoria.
 
 ```python
 from fabric_auditor import FabricAuditor
@@ -57,7 +91,7 @@ from langchain.chat_models import AzureChatOpenAI
 # 1. Configuração do Modelo (Exemplo com Azure OpenAI)
 # Certifique-se de ter as variáveis ou use um Key Vault para a chave
 llm_model = AzureChatOpenAI(
-    openai_api_base="https://seu-endpoint.openai.azure.com/",
+    openai_api_base="https://datasciencellm.openai.azure.com/",
     openai_api_key="SUA_CHAVE_AQUI", # Recomendado: mssparkutils.credentials.getSecret(...)
     openai_api_version="2024-12-01-preview",
     deployment_name="gpt-4",

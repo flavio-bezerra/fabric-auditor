@@ -13,15 +13,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FabricAuditor:
-    def __init__(self, llm_client: Any):
+    def __init__(self, llm_client: Optional[Any] = None):
         """
         Inicializa o FabricAuditor.
         
         Args:
-            llm_client: Um objeto cliente LLM instanciado (ex: AzureChatOpenAI do LangChain).
-                        Deve suportar o método `invoke` (padrão LangChain) ou `__call__` aceitando uma lista de mensagens.
+            llm_client (optional): Um objeto cliente LLM instanciado (ex: AzureChatOpenAI do LangChain).
+                                   Se None, tentará configurar automaticamente usando o arquivo JSON padrão.
         """
-        self.llm_client = llm_client
+        if llm_client:
+            self.llm_client = llm_client
+        else:
+            logger.info("Nenhum cliente LLM fornecido. Tentando configuração automática padrão...")
+            self.llm_client = self._setup_default_client()
         
         # Padrões para ignorar (auto-exclusão)
         self.ignore_patterns = [
@@ -34,6 +38,50 @@ class FabricAuditor:
             "trident.workspace.id",
             "# AUDIT_IGNORE"  # Marcador manual para ignorar células
         ]
+
+    def _setup_default_client(self) -> Any:
+        """
+        Configura o cliente AzureChatOpenAI padrão lendo do JSON e Key Vault.
+        """
+        try:
+            from notebookutils import notebookutils
+            from azure.identity import ClientSecretCredential
+            from azure.keyvault.secrets import SecretClient
+            from langchain.chat_models import AzureChatOpenAI
+            
+            # 1. Ler Credenciais do Arquivo
+            json_path = f"{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json"
+            if not os.path.exists(json_path):
+                raise FileNotFoundError(f"Arquivo de configuração não encontrado em: {json_path}")
+
+            with open(json_path, encoding='utf-8') as arquivo:
+                certificate = json.load(arquivo)
+
+            # 2. Pegar segredo do Key Vault
+            key_vault_url = "https://kv-azureopenia.vault.azure.net/" 
+            credential = ClientSecretCredential(
+                tenant_id=certificate['tenant_id'],
+                client_id=certificate['client_id'],
+                client_secret=certificate['client_secret']
+            )
+            secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
+            api_key = secret_client.get_secret('OPEN-AI-KEY').value
+
+            # 3. Configurar Modelo
+            print("⚙️ Configurando Azure OpenAI (Automático)...")
+            return AzureChatOpenAI(
+                openai_api_base="https://datasciencellm.openai.azure.com/",
+                openai_api_key=api_key,
+                openai_api_version="2024-12-01-preview",
+                deployment_name="Qualificacao_de_JSON",
+                temperature=0.9,
+                max_tokens=3000
+            )
+            
+        except ImportError:
+            raise ImportError("Dependências ausentes para configuração automática. Instale: azure-identity, azure-keyvault-secrets, langchain")
+        except Exception as e:
+            raise RuntimeError(f"Falha na configuração automática do cliente LLM: {e}")
 
     def _get_fabric_context(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
@@ -264,17 +312,16 @@ class FabricAuditor:
 
         system_prompt = (
             "Você é um Gerente Técnico de Produto (PM).\n"
-            "Resuma o que este código Python/Spark faz para uma audiência de negócios.\n\n"
+            "Resuma o que este código Python/Spark faz para uma audiência de negócios em até 3 parágrafos.\n\n"
+            "Sua resposta DEVE cobrir explicitamente:\n"
+            "1. **Origem dos Dados**: Liste quais tabelas ou arquivos são lidos.\n"
+            "2. **Lógica de Negócio**: Descreva quais cálculos, transformações ou regras são aplicadas.\n"
+            "3. **Destino dos Dados**: Indique se há gravação de dados e onde (tabelas, arquivos).\n\n"
             "DIRETRIZES:\n"
-            "- NÃO descreva a sintaxe (ex: \"ele importa pandas\", \"ele define uma função\").\n"
-            "- FOCO NO FLUXO DE DADOS: De onde o dado vem? Qual transformação de negócio acontece? Onde ele é salvo?\n"
-            "- IDENTIFIQUE O OBJETIVO: Infira se é um relatório de vendas, um modelo preditivo, um pipeline de ETL, etc.\n"
+            "- NÃO descreva sintaxe técnica (ex: \"usa pandas\", \"define função\").\n"
+            "- FOCO NO FLUXO DE DADOS E VALOR DE NEGÓCIO.\n"
             "- IDIOMA: Português do Brasil.\n"
-            "- ESTILO: Profissional, direto, sem emojis.\n\n"
-            "RESTRIÇÃO DE TAMANHO:\n"
-            "Máximo de 2 parágrafos curtos.\n\n"
-            "FORMATO DE SAÍDA:\n"
-            "Comece as frases com verbos de ação (ex: \"Processa...\", \"Ingere...\", \"Calcula...\")."
+            "- ESTILO: Profissional, direto, sem emojis."
         )
         
         return self._call_llm(system_prompt, clean_code)
