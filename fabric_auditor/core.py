@@ -13,14 +13,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FabricAuditor:
-    def __init__(self, llm_client: Optional[Any] = None):
+    def __init__(self, llm_client: Optional[Any] = None, auto_install: bool = True):
         """
         Inicializa o FabricAuditor.
         
         Args:
-            llm_client (optional): Um objeto cliente LLM instanciado (ex: AzureChatOpenAI do LangChain).
-                                   Se None, tentará configurar automaticamente usando o arquivo JSON padrão.
+            llm_client (optional): Um objeto cliente LLM instanciado. Se None, configura automaticamente.
+            auto_install (bool): Se True, verifica e instala dependências ausentes automaticamente.
         """
+        if auto_install:
+            self._ensure_dependencies()
+
         if llm_client:
             self.llm_client = llm_client
         else:
@@ -39,17 +42,50 @@ class FabricAuditor:
             "# AUDIT_IGNORE"  # Marcador manual para ignorar células
         ]
 
+    def _ensure_dependencies(self):
+        """Verifica e instala dependências críticas se estiverem faltando."""
+        required_packages = [
+            ("langchain", "langchain"),
+            ("langchain_community", "langchain-community"),
+            ("azure.identity", "azure-identity"),
+            ("azure.keyvault.secrets", "azure-keyvault-secrets"),
+            ("openai", "openai")
+        ]
+        
+        missing = []
+        for import_name, install_name in required_packages:
+            try:
+                __import__(import_name)
+            except ImportError:
+                missing.append(install_name)
+        
+        if missing:
+            print(f"📦 Dependências ausentes detectadas: {', '.join(missing)}")
+            print("⏳ Instalando automaticamente... (Isso pode levar alguns instantes)")
+            try:
+                import subprocess
+                import sys
+                subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
+                print("✅ Instalação concluída! Nota: Se ocorrerem erros de importação, reinicie o kernel.")
+            except Exception as e:
+                logger.error(f"❌ Falha na instalação automática: {e}")
+
     def _setup_default_client(self) -> Any:
         """
         Configura o cliente AzureChatOpenAI padrão lendo do JSON e Key Vault.
         """
         try:
-            from notebookutils import notebookutils
+            import notebookutils
             from azure.identity import ClientSecretCredential
             from azure.keyvault.secrets import SecretClient
             from langchain.chat_models import AzureChatOpenAI
             
             # 1. Ler Credenciais do Arquivo
+            # Verifica se notebookutils tem nbResPath (algumas versões podem variar)
+            if not hasattr(notebookutils, 'nbResPath'):
+                 # Tentativa de fallback para mssparkutils se necessário, ou erro mais claro
+                 pass 
+
             json_path = f"{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json"
             if not os.path.exists(json_path):
                 raise FileNotFoundError(f"Arquivo de configuração não encontrado em: {json_path}")
@@ -78,8 +114,8 @@ class FabricAuditor:
                 max_tokens=3000
             )
             
-        except ImportError:
-            raise ImportError("Dependências ausentes para configuração automática. Instale: azure-identity, azure-keyvault-secrets, langchain")
+        except ImportError as e:
+            raise ImportError(f"Dependências ausentes ou erro de importação: {e}. Instale: azure-identity, azure-keyvault-secrets, langchain")
         except Exception as e:
             raise RuntimeError(f"Falha na configuração automática do cliente LLM: {e}")
 
