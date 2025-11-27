@@ -45,8 +45,6 @@ class FabricAuditor:
     def _ensure_dependencies(self):
         """Verifica e instala dependências críticas se estiverem faltando."""
         required_packages = [
-            ("langchain", "langchain"),
-            ("langchain_community", "langchain-community"),
             ("azure.identity", "azure-identity"),
             ("azure.keyvault.secrets", "azure-keyvault-secrets"),
             ("openai", "openai")
@@ -72,13 +70,13 @@ class FabricAuditor:
 
     def _setup_default_client(self) -> Any:
         """
-        Configura o cliente AzureChatOpenAI padrão lendo do JSON e Key Vault.
+        Configura o cliente AzureOpenAI padrão lendo do JSON e Key Vault.
         """
         try:
             import notebookutils
             from azure.identity import ClientSecretCredential
             from azure.keyvault.secrets import SecretClient
-            from langchain.chat_models import AzureChatOpenAI
+            from openai import AzureOpenAI
             
             # 1. Ler Credenciais do Arquivo
             # Verifica se notebookutils tem nbResPath (algumas versões podem variar)
@@ -103,19 +101,16 @@ class FabricAuditor:
             secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
             api_key = secret_client.get_secret('OPEN-AI-KEY').value
 
-            # 3. Configurar Modelo
+            # 3. Configurar Cliente
             print("⚙️ Configurando Azure OpenAI (Automático)...")
-            return AzureChatOpenAI(
-                openai_api_base="https://datasciencellm.openai.azure.com/",
-                openai_api_key=api_key,
-                openai_api_version="2024-12-01-preview",
-                deployment_name="Qualificacao_de_JSON",
-                temperature=0.9,
-                max_tokens=3000
+            return AzureOpenAI(
+                azure_endpoint="https://datasciencellm.openai.azure.com/",
+                api_key=api_key,
+                api_version="2024-12-01-preview",
             )
             
         except ImportError as e:
-            raise ImportError(f"Dependências ausentes ou erro de importação: {e}. Instale: azure-identity, azure-keyvault-secrets, langchain")
+            raise ImportError(f"Dependências ausentes ou erro de importação: {e}. Instale: azure-identity, azure-keyvault-secrets, openai")
         except Exception as e:
             raise RuntimeError(f"Falha na configuração automática do cliente LLM: {e}")
 
@@ -364,24 +359,37 @@ class FabricAuditor:
 
     def _call_llm(self, system_prompt: str, user_content: str) -> str:
         try:
-            # Importação tardia ou assumindo que o usuário tem langchain instalado
-            from langchain.schema import HumanMessage, SystemMessage
-            
             messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_content)
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
             ]
             
-            # Suporte a LangChain moderno (.invoke) e legado (__call__)
-            if hasattr(self.llm_client, 'invoke'):
-                response = self.llm_client.invoke(messages)
-            else:
-                response = self.llm_client(messages)
-                
-            # O retorno geralmente é um objeto AIMessage, queremos o .content
-            return getattr(response, 'content', str(response))
+            # Verifica se é um cliente OpenAI (novo padrão)
+            if hasattr(self.llm_client, 'chat'):
+                deployment_name = "Qualificacao_de_JSON" # Nome do deployment fixo conforme solicitado
+                response = self.llm_client.chat.completions.create(
+                    model=deployment_name,
+                    messages=messages,
+                    temperature=0.01,
+                    max_tokens=3000,
+                )
+                return response.choices[0].message.content
+
+            # Fallback para LangChain (caso o usuário tenha passado um cliente customizado antigo)
+            elif hasattr(self.llm_client, 'invoke') or hasattr(self.llm_client, '__call__'):
+                from langchain.schema import HumanMessage, SystemMessage
+                lc_messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_content)
+                ]
+                if hasattr(self.llm_client, 'invoke'):
+                    response = self.llm_client.invoke(lc_messages)
+                else:
+                    response = self.llm_client(lc_messages)
+                return getattr(response, 'content', str(response))
             
-        except ImportError:
-            return "Erro: A biblioteca 'langchain' é necessária para usar este recurso. Instale-a com 'pip install langchain'."
+            else:
+                return "Erro: Cliente LLM não reconhecido."
+            
         except Exception as e:
             return f"Chamada ao LLM Falhou: {e}"
