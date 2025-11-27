@@ -1,0 +1,9 @@
+README.md
+setup.py
+fabric_auditor/__init__.py
+fabric_auditor/core.py
+fabric_auditor.egg-info/PKG-INFO
+fabric_auditor.egg-info/SOURCES.txt
+fabric_auditor.egg-info/dependency_links.txt
+fabric_auditor.egg-info/requires.txt
+fabric_auditor.egg-info/top_level.txt

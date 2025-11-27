@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: fabric_auditor
+Version: 0.1.0
+Summary: Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs.
+Author: Seu Nome
+Requires-Dist: requests
+Requires-Dist: openai==1.51.0
+Requires-Dist: pydantic==2.12.2
+Requires-Dist: httpx==0.27.2
+Requires-Dist: azure-identity
+Requires-Dist: azure-keyvault-secrets
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: summary
