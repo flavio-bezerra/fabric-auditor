@@ -266,33 +266,45 @@ class FabricAuditor:
             return ""
 
     def _clean_noise(self, code_string: str) -> str:
-        # 1. Remove cabeçalhos de Licença Apache (e potencialmente outros)
+        # 1. Remove cabeçalhos de Licença Apache e URLs associadas
+        # O padrão [\s\S]*? permite capturar quebras de linha até encontrar o fim do bloco
+        code_string = re.sub(r'(?m)^#\s*http://www\.apache\.org/licenses/LICENSE-2\.0[\s\S]*?#\n', '', code_string)
         code_string = re.sub(r'(?m)^#\s*Copyright.*(?:\n#.*)*', '', code_string)
         code_string = re.sub(r'(?m)^#\s*Licensed under.*(?:\n#.*)*', '', code_string)
-        code_string = re.sub(r'(# Licensed to the Apache[\s\S]*?#\n)', '', code_string)
         
-        # 2. Remove blocos init_spark
-        pattern_spark = r'def init_spark\(\):[\s\S]*?del init_spark'
-        code_string = re.sub(pattern_spark, '', code_string)
+        # 2. Remove Inicialização do Contexto Spark (Boilerplate específico do Fabric)
+        # Captura desde os imports do HiveContext até a definição de sqlContext = None
+        code_string = re.sub(r'from pyspark\.sql import HiveContext[\s\S]*?sqlContext = None', '', code_string)
 
-        # 3. Remove sc.setJobGroup / sc.setLocalProperty
+        # 3. Remove Blocos de "Personalize Session" e "DS Copilot"
+        # Remove o bloco try/except que tenta carregar o chat_magics
+        code_string = re.sub(r'(?m)# Personalize Session[\s\S]*?print\(\'Module chat_magics is not found\.\'\)', '', code_string)
+
+        # 4. Remove sc.setJobGroup (Versão Aprimorada para Multi-linhas)
+        # O Fabric costuma usar sc.setJobGroup("N", """...""") com strings longas.
+        # O regex anterior falhava em capturar o conteúdo dentro das aspas triplas.
+        code_string = re.sub(r'sc\.setJobGroup\("\d+",\s*"""[\s\S]*?"""\)', '', code_string)
         code_string = re.sub(r'sc\.setJobGroup\(.*?\)', '', code_string)
         code_string = re.sub(r'sc\.setLocalProperty\(.*?\)', '', code_string)
-        code_string = re.sub(r'(sc\.setJobGroup[\s\S]*?sourceId", "default"\))', '', code_string)
         
-        # 4. Remove imports e código de infraestrutura
+        # 5. Remove imports e código de infraestrutura de notebooks
         code_string = re.sub(r'(?m)^import notebookutils.*$', '', code_string)
         code_string = re.sub(r'(?m)^from notebookutils.*$', '', code_string)
         code_string = re.sub(r'(import notebookutils|from notebookutils.*|initializeLHContext.*|notebookutils\.prepare.*)', '', code_string)
         
-        # 5. Remove comandos Mágicos
+        # 6. Remove blocos init_spark antigos (se houver)
+        pattern_spark = r'def init_spark\(\):[\s\S]*?del init_spark'
+        code_string = re.sub(pattern_spark, '', code_string)
+        
+        # 7. Remove comandos Mágicos e chamadas do próprio auditor (para evitar loop)
         code_string = re.sub(r'(?m)^%.*$', '', code_string)
         code_string = re.sub(r'(get_ipython\(\)\.run_line_magic.*)', '', code_string)
+        code_string = re.sub(r'print\(auditor\.get_model_input\(\)\)', '', code_string) # Remove a própria chamada de debug
         
-        # 6. Redige segredos (sk-...)
+        # 8. Redige segredos (sk-...)
         code_string = re.sub(r'sk-[a-zA-Z0-9]{20,}', 'sk-***REDACTED***', code_string)
         
-        # 7. Limpeza final
+        # 9. Limpeza final
         code_string = re.sub(r'^[ \t]+$', '', code_string, flags=re.MULTILINE) # Remove linhas vazias com espaços
         code_string = re.sub(r'\n{3,}', '\n\n', code_string) # Compacta newlines excessivos
         
