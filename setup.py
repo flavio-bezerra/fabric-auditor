@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="fabric_auditor",
-    version="0.1.0",
+    version="0.1.1",
     description="Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs.",
     author="Seu Nome",
     packages=find_packages(),
