@@ -268,19 +268,15 @@ class FabricAuditor:
     def _clean_noise(self, code_string: str) -> str:
         # 0. Opção Nuclear (Solicitado pelo usuário)
         # O Fabric injeta um preâmbulo que invariavelmente contém este print.
-        # Se encontrado, cortamos tudo antes da ÚLTIMA ocorrência dele.
-        marker = "print('Module chat_magics is not found.')"
-        if marker in code_string:
-             # rpartition divide na última ocorrência: (antes, separador, depois)
-             # Pegamos apenas o 'depois'
-            _, _, code_string = code_string.rpartition(marker)
+        # Usamos regex guloso (greedy) com flag (?s) para remover tudo desde o início 
+        # até a ÚLTIMA ocorrência desse print, limpando qualquer lixo anterior.
+        pattern_nuclear = r'(?s).*print\s*\(\s*[\'"]Module chat_magics is not found\.[\'"]\s*\)'
         
-        # Fallback para aspas duplas, caso varie
-        marker_double = 'print("Module chat_magics is not found.")'
-        if marker_double in code_string:
-            _, _, code_string = code_string.rpartition(marker_double)
+        # Verifica se o padrão existe antes de aplicar para evitar custo desnecessário
+        if "Module chat_magics is not found" in code_string:
+            code_string = re.sub(pattern_nuclear, '', code_string, count=1)
 
-        # 1. Remove cabeçalhos de Licença Apache (caso restem)
+        # 1. Remove cabeçalhos de Licença Apache (caso restem ou nuclear falhe)
         code_string = re.sub(r'(?m)^\s*#.*http://www\.apache\.org/licenses/LICENSE-2\.0[\s\S]*?limitations under the License\..*(\n#.*)?', '', code_string)
         
         # 2. Remove Inicialização do Contexto Spark (caso reste)
