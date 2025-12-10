@@ -266,16 +266,27 @@ class FabricAuditor:
             return ""
 
     def _clean_noise(self, code_string: str) -> str:
-        # 1. Remove cabeçalhos de Licença Apache e metadados de jobs
-        # Tratamento mais robusto para header de licença (pegando bloco do 'Unless required...' até o final do bloco de comentários)
+        # 0. Opção Nuclear (Solicitado pelo usuário)
+        # O Fabric injeta um preâmbulo que invariavelmente contém este print.
+        # Se encontrado, cortamos tudo antes da ÚLTIMA ocorrência dele.
+        marker = "print('Module chat_magics is not found.')"
+        if marker in code_string:
+             # rpartition divide na última ocorrência: (antes, separador, depois)
+             # Pegamos apenas o 'depois'
+            _, _, code_string = code_string.rpartition(marker)
+        
+        # Fallback para aspas duplas, caso varie
+        marker_double = 'print("Module chat_magics is not found.")'
+        if marker_double in code_string:
+            _, _, code_string = code_string.rpartition(marker_double)
+
+        # 1. Remove cabeçalhos de Licença Apache (caso restem)
         code_string = re.sub(r'(?m)^\s*#.*http://www\.apache\.org/licenses/LICENSE-2\.0[\s\S]*?limitations under the License\..*(\n#.*)?', '', code_string)
         
-        # 2. Remove Inicialização do Contexto Spark (Boilerplate específico do Fabric)
-        # Captura desde os imports do HiveContext/StreamingContext até a definição de nulos
+        # 2. Remove Inicialização do Contexto Spark (caso reste)
         code_string = re.sub(r'from pyspark\.sql import HiveContext[\s\S]*?sqlContext = None', '', code_string)
 
-        # 3. Remove Blocos de "Personalize Session" e "DS Copilot"
-        # Agora trata ocorrencias dentro e fora de strings, removendo todo o bloco try/except
+        # 3. Remove Blocos de "Personalize Session" (Legacy/Fallback)
         code_string = re.sub(r'(?m)#\s*Personalize Session[\s\S]*?print\([\'"]Module chat_magics is not found\.[\'"]\)', '', code_string)
 
         # 4. Remove sc.setJobGroup (Versão Aprimorada)
@@ -289,7 +300,7 @@ class FabricAuditor:
         code_string = re.sub(r'(?m)^from notebookutils.*$', '', code_string)
         code_string = re.sub(r'(import notebookutils|from notebookutils.*|initializeLHContext.*|notebookutils\.prepare.*)', '', code_string)
         
-        # 6. Remove blocos init_spark antigos (se houver)
+        # 6. Remove blocos init_spark antigos
         pattern_spark = r'def init_spark\(\):[\s\S]*?del init_spark'
         code_string = re.sub(pattern_spark, '', code_string)
         
