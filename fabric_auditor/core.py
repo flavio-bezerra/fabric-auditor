@@ -265,33 +265,50 @@ class FabricAuditor:
             logger.error(f"Estratégia B falhou: {e}")
             return ""
 
-    def _clean_noise(self, code_string: str) -> str:
-        # 0. Opção Nuclear (Solicitado pelo usuário)
-        # O Fabric injeta um preâmbulo que invariavelmente contém este print.
-        # Usamos regex guloso (greedy) com flag (?s) para remover tudo desde o início 
-        # até a ÚLTIMA ocorrência desse print, limpando qualquer lixo anterior.
-        pattern_nuclear = r'(?s).*print\s*\(\s*[\'"]Module chat_magics is not found\.[\'"]\s*\)'
+    def _post_process_cut(self, code: str) -> str:
+        """
+        Função de corte drástico que roda DEPOIS de toda limpeza (Solicitado pelo usuário).
+        Corta todo o texto antes da última ocorrência do print de erro do chat_magics.
+        """
+        markers = [
+            "print('Module chat_magics is not found.')",
+            'print("Module chat_magics is not found.")'
+        ]
         
-        # Verifica se o padrão existe antes de aplicar para evitar custo desnecessário
-        if "Module chat_magics is not found" in code_string:
-            code_string = re.sub(pattern_nuclear, '', code_string, count=1)
+        last_idx = -1
+        used_marker_len = 0
+        
+        for m in markers:
+            idx = code.rfind(m)
+            if idx > last_idx:
+                last_idx = idx
+                used_marker_len = len(m)
+                
+        if last_idx != -1:
+            # Retorna tudo APÓS o marcador encontrado
+            logger.info("Corte nuclear aplicado: Preâmbulo removido.")
+            return code[last_idx + used_marker_len:]
+            
+        return code
 
-        # 1. Remove cabeçalhos de Licença Apache (caso restem ou nuclear falhe)
+    def _clean_noise(self, code_string: str) -> str:
+        # A limpeza baseada em Regex continua útil para remover sujeiras espalhadas
+        
+        # 1. Remove cabeçalhos de Licença Apache
         code_string = re.sub(r'(?m)^\s*#.*http://www\.apache\.org/licenses/LICENSE-2\.0[\s\S]*?limitations under the License\..*(\n#.*)?', '', code_string)
         
-        # 2. Remove Inicialização do Contexto Spark (caso reste)
+        # 2. Remove Inicialização do Contexto Spark
         code_string = re.sub(r'from pyspark\.sql import HiveContext[\s\S]*?sqlContext = None', '', code_string)
 
-        # 3. Remove Blocos de "Personalize Session" (Legacy/Fallback)
+        # 3. Remove Blocos de "Personalize Session"
         code_string = re.sub(r'(?m)#\s*Personalize Session[\s\S]*?print\([\'"]Module chat_magics is not found\.[\'"]\)', '', code_string)
 
-        # 4. Remove sc.setJobGroup (Versão Aprimorada)
-        # Remove chamadas com strings longas (docstrings) comuns no Fabric
+        # 4. Remove sc.setJobGroup
         code_string = re.sub(r'sc\.setJobGroup\s*\(\s*["\'].*?["\']\s*,\s*"""[\s\S]*?"""\s*\)', '', code_string)
         code_string = re.sub(r'sc\.setJobGroup\s*\(.*?\)', '', code_string)
         code_string = re.sub(r'sc\.setLocalProperty\(.*?\)', '', code_string)
         
-        # 5. Remove imports e código de infraestrutura de notebooks (notebookutils)
+        # 5. Remove imports e código de infraestrutura
         code_string = re.sub(r'(?m)^import notebookutils.*$', '', code_string)
         code_string = re.sub(r'(?m)^from notebookutils.*$', '', code_string)
         code_string = re.sub(r'(import notebookutils|from notebookutils.*|initializeLHContext.*|notebookutils\.prepare.*)', '', code_string)
@@ -305,12 +322,16 @@ class FabricAuditor:
         code_string = re.sub(r'(get_ipython\(\)\.run_line_magic.*)', '', code_string)
         code_string = re.sub(r'print\(auditor\.get_model_input\(\)\)', '', code_string) 
         
-        # 8. Redige segredos (sk-...)
+        # 8. Redige segredos
         code_string = re.sub(r'sk-[a-zA-Z0-9]{20,}', 'sk-***REDACTED***', code_string)
         
         # 9. Limpeza final de linhas vazias
         code_string = re.sub(r'^[ \t]+$', '', code_string, flags=re.MULTILINE)
         code_string = re.sub(r'\n{3,}', '\n\n', code_string)
+
+        # 10. CORTE FINAL (Pós-processamento)
+        # Garante que nada antes do boilerplate do Fabric sobreviva
+        code_string = self._post_process_cut(code_string)
         
         return code_string.strip()
 
