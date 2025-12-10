@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: fabric_auditor
-Version: 0.1.1
+Version: 0.1.2
 Summary: Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs.
 Author: Seu Nome
 Requires-Dist: requests
