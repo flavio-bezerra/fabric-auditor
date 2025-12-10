@@ -292,46 +292,49 @@ class FabricAuditor:
         return code
 
     def _clean_noise(self, code_string: str) -> str:
-        # A limpeza baseada em Regex continua útil para remover sujeiras espalhadas
+        # 1. CORTE NUCLEAR (Primeiro passo)
+        # Remove o preâmbulo do Fabric imediatamente para evitar processar texto inútil
+        code_string = self._post_process_cut(code_string)
         
-        # 1. Remove cabeçalhos de Licença Apache
+        # 2. Remove sujeiras remanescentes (Pós-Corte)
+        
+        # Remove cabeçalhos de Licença Apache (Variação URL e Variação ASF Textual)
         code_string = re.sub(r'(?m)^\s*#.*http://www\.apache\.org/licenses/LICENSE-2\.0[\s\S]*?limitations under the License\..*(\n#.*)?', '', code_string)
-        
-        # 2. Remove Inicialização do Contexto Spark
+        # Nova regra para a variação "ASF" que sobrou
+        code_string = re.sub(r'(?m)^\s*#\s*Licensed to the Apache Software Foundation[\s\S]*?The ASF licenses this file to You[\s\S]*?License\.', '', code_string)
+        code_string = re.sub(r'(?m)^\s*#\s*Licensed to the Apache Software Foundation[\s\S]*?(?=\n[^#]|\Z)', '', code_string)
+
+        # Remove Inicialização do Contexto Spark
         code_string = re.sub(r'from pyspark\.sql import HiveContext[\s\S]*?sqlContext = None', '', code_string)
 
-        # 3. Remove Blocos de "Personalize Session"
+        # Remove Blocos de "Personalize Session"
         code_string = re.sub(r'(?m)#\s*Personalize Session[\s\S]*?print\([\'"]Module chat_magics is not found\.[\'"]\)', '', code_string)
 
-        # 4. Remove sc.setJobGroup
+        # Remove sc.setJobGroup
         code_string = re.sub(r'sc\.setJobGroup\s*\(\s*["\'].*?["\']\s*,\s*"""[\s\S]*?"""\s*\)', '', code_string)
         code_string = re.sub(r'sc\.setJobGroup\s*\(.*?\)', '', code_string)
         code_string = re.sub(r'sc\.setLocalProperty\(.*?\)', '', code_string)
         
-        # 5. Remove imports e código de infraestrutura
+        # Remove imports e código de infraestrutura
         code_string = re.sub(r'(?m)^import notebookutils.*$', '', code_string)
         code_string = re.sub(r'(?m)^from notebookutils.*$', '', code_string)
         code_string = re.sub(r'(import notebookutils|from notebookutils.*|initializeLHContext.*|notebookutils\.prepare.*)', '', code_string)
         
-        # 6. Remove blocos init_spark antigos
+        # Remove blocos init_spark antigos
         pattern_spark = r'def init_spark\(\):[\s\S]*?del init_spark'
         code_string = re.sub(pattern_spark, '', code_string)
         
-        # 7. Remove comandos Mágicos e chamadas do próprio auditor
+        # Remove comandos Mágicos e chamadas do próprio auditor
         code_string = re.sub(r'(?m)^%.*$', '', code_string)
         code_string = re.sub(r'(get_ipython\(\)\.run_line_magic.*)', '', code_string)
         code_string = re.sub(r'print\(auditor\.get_model_input\(\)\)', '', code_string) 
         
-        # 8. Redige segredos
+        # Redige segredos
         code_string = re.sub(r'sk-[a-zA-Z0-9]{20,}', 'sk-***REDACTED***', code_string)
         
-        # 9. Limpeza final de linhas vazias
+        # Limpeza final de linhas vazias
         code_string = re.sub(r'^[ \t]+$', '', code_string, flags=re.MULTILINE)
         code_string = re.sub(r'\n{3,}', '\n\n', code_string)
-
-        # 10. CORTE FINAL (Pós-processamento)
-        # Garante que nada antes do boilerplate do Fabric sobreviva
-        code_string = self._post_process_cut(code_string)
         
         return code_string.strip()
 
