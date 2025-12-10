@@ -11,6 +11,7 @@
     *   Configurações de `sc.setJobGroup`.
     *   Comandos mágicos (`%time`, `%pip`).
     *   **Redação de Segredos**: Mascara automaticamente chaves de API (ex: `sk-...`) antes de enviar ao LLM.
+*   **Visualização de Input**: Permite inspecionar exatamente o que será enviado para o modelo (o código limpo), garantindo transparência no que está sendo auditado.
 *   **Agnóstico a LLM**: Projetado para funcionar com qualquer modelo compatível com **LangChain** (Azure OpenAI, OpenAI, Ollama, etc.).
 
 ---
@@ -56,8 +57,12 @@ from fabric_auditor import FabricAuditor
 # Inicializa sem argumentos -> Tenta ler JSON e KeyVault automaticamente
 auditor = FabricAuditor()
 
+# (Opcional) Verifica o que será enviado ao modelo
+print("👁️ Input do Modelo:")
+print(auditor.get_model_input())
+
 # Executa a auditoria
-print("🔍 Auditoria:")
+print("\n🔍 Auditoria:")
 print(auditor.audit_code())
 
 # Gera o resumo
@@ -102,12 +107,15 @@ llm_model = AzureChatOpenAI(
 # Passamos o cliente LLM diretamente para o auditor
 auditor = FabricAuditor(llm_client=llm_model)
 
-# 3. Auditar o Código (Segurança, Performance e Qualidade)
+# 3. (Opcional) Inspecionar o input
+print(auditor.get_model_input())
+
+# 4. Auditar o Código (Segurança, Performance e Qualidade)
 print("🔍 Iniciando Auditoria...\n")
 relatorio = auditor.audit_code()
 print(relatorio)
 
-# 4. Gerar Resumo do Notebook
+# 5. Gerar Resumo do Notebook
 print("\n📝 Gerando Resumo...\n")
 resumo = auditor.summarize_notebook()
 print(resumo)

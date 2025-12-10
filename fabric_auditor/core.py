@@ -449,6 +449,19 @@ Como Engenheiro Sênior, analise o código criticamente e liste:
         
         return self._call_llm(system_prompt, clean_code)
 
+    def get_model_input(self) -> str:
+        """
+        Retorna o código limpo que seria enviado ao modelo.
+        Útil para acompanhar o que está sendo analisado (os 'prints' de execução).
+        """
+        raw_code = self._extract_code_hybrid()
+        clean_code = self._clean_noise(raw_code)
+        
+        if not clean_code:
+            return "Nenhum código detectado."
+            
+        return clean_code
+
     def _call_llm(self, system_prompt: str, user_content: str) -> str:
         try:
             messages = [
