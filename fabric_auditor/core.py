@@ -1,3 +1,10 @@
+"""
+Módulo Core do Fabric Auditor.
+
+Este módulo contém a classe principal `FabricAuditor` e utilitários relacionados para
+automação de auditoria, revisão de código e geração de documentação de notebooks
+no ambiente Microsoft Fabric.
+"""
 import os
 import re
 import time
@@ -14,13 +21,21 @@ logging.getLogger("azure").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 class FabricAuditor:
+    """
+    Classe principal para auditar e resumir notebooks no ambiente Microsoft Fabric.
+    
+    Esta classe gerencia a extração de código, limpeza, e interação com modelos LLM
+    para fornecer feedback sobre qualidade de código, segurança e gerar documentação.
+    """
     def __init__(self, llm_client: Optional[Any] = None, auto_install: bool = True):
         """
         Inicializa o FabricAuditor.
-        
+
         Args:
-            llm_client (optional): Um objeto cliente LLM instanciado. Se None, configura automaticamente.
-            auto_install (bool): Se True, verifica e instala dependências ausentes automaticamente.
+            llm_client (Optional[Any]): Um objeto cliente LLM instanciado (Ex: AzureOpenAI).
+                Se None, o auditor tentará configurar um cliente padrão usando credenciais do ambiente.
+            auto_install (bool): Se True, verifica e instala dependências Python ausentes (azure-identity, etc.)
+                automaticamente ao iniciar.
         """
         if auto_install:
             self._ensure_dependencies()
@@ -44,7 +59,15 @@ class FabricAuditor:
         ]
 
     def _ensure_dependencies(self):
-        """Verifica e instala dependências críticas se estiverem faltando."""
+        """
+        Verifica e instala dependências críticas se estiverem faltando no ambiente.
+
+        Verifica se pacotes como 'azure.identity', 'azure.keyvault.secrets' e 'openai'
+        estão instalados. Se não, tenta instalá-los via pip.
+
+        Returns:
+            None
+        """
         required_packages = [
             ("azure.identity", "azure-identity"),
             ("azure.keyvault.secrets", "azure-keyvault-secrets"),
@@ -71,7 +94,17 @@ class FabricAuditor:
 
     def _setup_default_client(self) -> Any:
         """
-        Configura o cliente AzureOpenAI padrão lendo do JSON e Key Vault.
+        Configura o cliente AzureOpenAI padrão lendo configurações de arquivos JSON e Key Vault.
+
+        Tenta localizar credenciais no sistema de arquivos do Fabric e recuperar a chave da API
+        do Azure Key Vault.
+
+        Returns:
+            Any: Uma instância configurada do cliente AzureOpenAI.
+
+        Raises:
+            ImportError: Se as dependências necessárias não estiverem instaladas.
+            RuntimeError: Se houver falha na configuração automática (ex: arquivo não encontrado, erro de segredo).
         """
         try:
             import notebookutils
@@ -117,8 +150,16 @@ class FabricAuditor:
 
     def _get_fabric_context(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
-        Auxiliar para obter o contexto do Fabric (token, workspace_id, notebook_id).
-        Usa configurações do Spark para IDs, o que é mais robusto que correspondência por nome.
+        Obtém o contexto de execução do Microsoft Fabric (Token, Workspace ID, Notebook ID).
+
+        Utiliza o `mssparkutils` e a configuração da sessão Spark ativa para recuperar
+        identificadores necessários para chamadas de API do Fabric.
+
+        Returns:
+            Tuple[Optional[str], Optional[str], Optional[str]]: Uma tupla contendo:
+                - Token de acesso (str) ou None.
+                - Workspace ID (str) ou None.
+                - Notebook Artifact ID (str) ou None.
         """
         try:
             from notebookutils import mssparkutils
@@ -144,9 +185,13 @@ class FabricAuditor:
 
     def _extract_code_hybrid(self) -> str:
         """
-        Extrai código usando uma estratégia à prova de falhas:
-        1. Tenta API do Fabric (Estratégia A).
-        2. Fallback para histórico do IPython (Estratégia B).
+        Extrai o código do notebook atual usando uma estratégia híbrida à prova de falhas.
+
+        1. Tenta obter a definição do notebook via API do Fabric (mais preciso).
+        2. Se falhar, recorre ao histórico de comandos executados no IPython (`In`).
+
+        Returns:
+            str: O código fonte extraído do notebook (células concatenadas).
         """
         # Estratégia A: API
         code = self._extract_via_api()
@@ -159,6 +204,15 @@ class FabricAuditor:
         return self._extract_via_memory()
 
     def _extract_via_api(self) -> Optional[str]:
+        """
+        Tenta extrair o código fonte do notebook atual chamando a API do Microsoft Fabric.
+
+        Requer token de acesso e IDs de workspace/artifact. Faz polling se a API retornar 202 (Accepted).
+        Decodifica o payload base64 das células do notebook.
+
+        Returns:
+            Optional[str]: O código fonte concatenado se bem-sucedido, ou None se falhar.
+        """
         token, workspace_id, notebook_id = self._get_fabric_context()
         if not token or not workspace_id or not notebook_id:
             logger.warning("Contexto do Fabric ausente para extração via API.")
@@ -229,7 +283,13 @@ class FabricAuditor:
 
     def _extract_via_memory(self) -> str:
         """
-        Recupera células executadas da lista global `In` do IPython usando inspect.
+        Recupera código das células executadas inspecionando a variável global `In` do IPython.
+
+        Esta é uma estratégia de fallback. Ela acessa a pilha de execução para encontrar
+        o histórico de comandos.
+
+        Returns:
+            str: O código das células executadas concatenado. Retorna string vazia se falhar.
         """
         try:
             # Usa inspect para encontrar o frame do chamador que possui 'In' (histórico do IPython)
@@ -267,8 +327,16 @@ class FabricAuditor:
 
     def _post_process_cut(self, code: str) -> str:
         """
-        Função de corte drástico que roda DEPOIS de toda limpeza (Solicitado pelo usuário).
-        Corta todo o texto antes da última ocorrência do print de erro do chat_magics.
+        Aplica um corte drástico no código para remover preâmbulos e saídas de erro conhecidas.
+
+        Procura por marcadores de erro específicos (ex: 'Module chat_magics is not found') e
+        remove todo o texto anterior a eles, assumindo que são logs irrelevantes.
+
+        Args:
+            code (str): O código ou texto bruto extraído.
+
+        Returns:
+            str: O código processado, contendo apenas a parte relevante após o marcador (se encontrado).
         """
         markers = [
             "print('Module chat_magics is not found.')",
@@ -292,6 +360,22 @@ class FabricAuditor:
         return code
 
     def _clean_noise(self, code_string: str) -> str:
+        """
+        Remove ruídos, imports desnecessários e informações sensíveis do código.
+
+        Executa uma série de substituições regex para limpar:
+        - Licenças Apache.
+        - Configurações de Spark/Contexto.
+        - Imports de infraestrutura (notebookutils).
+        - Comandos mágicos (%) e chamadas de sistema.
+        - Chaves de API (redação básica).
+
+        Args:
+            code_string (str): A string de código bruto.
+
+        Returns:
+            str: A string de código limpa e formatada.
+        """
         # 1. CORTE NUCLEAR (Primeiro passo)
         # Remove o preâmbulo do Fabric imediatamente para evitar processar texto inútil
         code_string = self._post_process_cut(code_string)
@@ -339,6 +423,15 @@ class FabricAuditor:
         return code_string.strip()
 
     def audit_code(self) -> str:
+        """
+        Executa a auditoria completa do notebook atual.
+
+        Extrai o código, limpa, e envia para o modelo LLM com um prompt de "Engenheiro de Dados Sênior"
+        para verificar segurança, performance, governança e melhores práticas.
+
+        Returns:
+            str: O relatório de auditoria gerado pelo LLM.
+        """
         raw_code = self._extract_code_hybrid()
         clean_code = self._clean_noise(raw_code)
         
@@ -417,6 +510,15 @@ Para cada problema encontrado, gere um bloco no seguinte padrão Markdown:
         return self._call_llm(system_prompt, clean_code)
 
     def summarize_notebook(self) -> str:
+        """
+        Gera um resumo técnico documentado do notebook atual.
+
+        Extrai e limpa o código, e então solicita ao LLM que crie uma documentação técnica
+        incluindo resumo executivo, arquitetura, fluxo de dados e regras de negócio.
+
+        Returns:
+            str: A documentação técnica gerada pelo LLM.
+        """
         raw_code = self._extract_code_hybrid()
         clean_code = self._clean_noise(raw_code)
         
@@ -491,8 +593,12 @@ Como Engenheiro Sênior, analise o código criticamente e liste:
 
     def get_model_input(self) -> str:
         """
-        Retorna o código limpo que seria enviado ao modelo.
-        Útil para acompanhar o que está sendo analisado (os 'prints' de execução).
+        Retorna o código limpo que seria enviado ao modelo LLM.
+        
+        Útil para debug e verificar exatamente o que o auditor está "vendo" antes da análise.
+
+        Returns:
+            str: O código fonte processado e limpo.
         """
         raw_code = self._extract_code_hybrid()
         clean_code = self._clean_noise(raw_code)
@@ -503,6 +609,16 @@ Como Engenheiro Sênior, analise o código criticamente e liste:
         return clean_code
 
     def _call_llm(self, system_prompt: str, user_content: str) -> str:
+        """
+        Envia uma chamada para o modelo LLM (Azure OpenAI ou LangChain).
+
+        Args:
+            system_prompt (str): O prompt do sistema definindo a persona e instruções.
+            user_content (str): O conteúdo do usuário (código a ser analisado).
+
+        Returns:
+            str: A resposta de texto do modelo. Retorna mensagem de erro em caso de falha.
+        """
         try:
             messages = [
                 {"role": "system", "content": system_prompt},
