@@ -1,6 +1,12 @@
 # Fabric Auditor 🕵️‍♂️📊
 
-**Fabric Auditor** é uma biblioteca Python projetada especificamente para rodar dentro de **Microsoft Fabric Notebooks**. Ela extrai automaticamente o código do notebook atual, limpa "ruídos" (como boilerplate do Spark e comandos mágicos), e envia o código limpo para um Modelo de Linguagem (LLM) para auditoria de segurança, performance ou sumarização.
+[![Python Version](https://img.shields.io/pypi/pyversions/fabric-auditor)](https://pypi.org/project/fabric-auditor/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+**Fabric Auditor** é uma biblioteca Python projetada especificamente para rodar dentro de **Microsoft Fabric Notebooks**. Ela extrai automaticamente o código do notebook atual, limpa "ruídos" (como boilerplate do Spark e comando mágicos), e envia o código limpo para um Modelo de Linguagem (LLM) para auditoria de segurança, performance ou sumarização.
+
+---
 
 ## 🚀 Funcionalidades
 
@@ -16,42 +22,40 @@
 
 ---
 
-## 📦 Como Instalar no Microsoft Fabric
+## 📦 Instalação
 
-Como esta biblioteca está hospedada em um repositório Git, você pode instalá-la diretamente no seu ambiente.
+### Instalação no Microsoft Fabric
 
-### Opção 1: Instalação Direta via Git (Recomendado)
+Como esta biblioteca está em desenvolvimento ou hospedada em repositório Git, você pode instalá-la diretamente no seu ambiente.
 
-Você pode instalar diretamente na sessão do notebook usando `%pip` apontando para o seu repositório.
+#### Opção 1: Instalação Direta via Session (Notebook)
 
-**Repositório Público:**
+Você pode instalar diretamente na sessão do notebook usando `%pip`.
 
 ```python
+# Repositório Público
 %pip install git+https://github.com/flavio-bezerra/fabric-auditor.git
 ```
 
-**Repositório Privado (com Token):**
-Se o repositório for privado, você precisará de um Personal Access Token (PAT).
-
 ```python
-# Exemplo com GitHub
+# Repositório Privado (com Token)
 %pip install git+https://SEU_TOKEN@github.com/flavio-bezerra/fabric-auditor.git
 ```
 
-### Opção 2: Instalação via Environment (Produção)
+#### Opção 2: Instalação via Environment (Recomendado para Produção)
 
 Para disponibilizar a biblioteca em todos os notebooks de um Workspace:
 
-1. No Microsoft Fabric, vá em **Manage environments** (ou crie um novo).
+1. No Microsoft Fabric, vá em **Manage environments**.
 2. Na seção **Public Libraries**, adicione as dependências: `langchain`, `openai`.
-3. Para a biblioteca `fabric_auditor`, você tem duas escolhas:
-   * **Upload do Wheel**: Gere o `.whl` localmente (`python setup.py bdist_wheel`) e faça upload na aba **Custom Libraries**.
-   * **PyPI (se publicado)**: Se você publicar no PyPI futuramente, basta adicionar `fabric-auditor` nas Public Libraries.
+3. Para a biblioteca `fabric_auditor`:
+   * **Upload do Wheel**: Gere o `.whl` localmente com `python -m build` e faça upload na aba **Custom Libraries**.
+   * **PyPI**: Se publicada, adicione `fabric-auditor` nas Public Libraries.
 4. Publique o ambiente e anexe-o ao seu Notebook.
 
 ---
 
-## 🚀 Uso Rápido (Configuração Automática)
+## 🛠️ Uso Rápido (Configuração Automática)
 
 Se você já possui o ambiente configurado com o arquivo de credenciais padrão, a biblioteca se configura automaticamente:
 
@@ -71,16 +75,13 @@ print("\n🔍 Auditoria:")
 display(Markdown(auditor.audit_code()))
 
 # Gera o resumo
-print("\n📝 Resumo:")
+print("\n📝 Resumo Resumo:")
 display(Markdown(auditor.summarize_notebook()))
 ```
 
-### Pré-requisitos para Uso Rápido
+### Pré-requisitos para Uso Automático
 
-Para que a configuração automática funcione, você precisa ter:
-
-1. Um arquivo JSON em: `{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json`
-2. O JSON deve seguir este formato:
+1. Um arquivo JSON em: `{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json` com o formato:
    ```json
    {
        "tenant_id": "...",
@@ -88,62 +89,50 @@ Para que a configuração automática funcione, você precisa ter:
        "client_secret": "..."
    }
    ```
-3. As bibliotecas `azure-identity` e `azure-keyvault-secrets` instaladas.
+2. Bibliotecas `azure-identity` e `azure-keyvault-secrets` instaladas.
 
 ---
 
-## 🛠️ Como Usar (Configuração Manual)
+## ⚙️ Configuração Manual (Custom LLM)
 
-Aqui está um exemplo completo de como configurar o modelo manualmente (usando Azure OpenAI) e rodar a auditoria.
+Exemplo configurando o modelo manualmente (usando Azure OpenAI):
 
 ```python
 from fabric_auditor import FabricAuditor
 from IPython.display import display, Markdown
 from langchain.chat_models import AzureChatOpenAI
 
-# 1. Configuração do Modelo (Exemplo com Azure OpenAI)
-# Certifique-se de ter as variáveis ou use um Key Vault para a chave
+# 1. Configuração do Modelo
 llm_model = AzureChatOpenAI(
     openai_api_base="https://datasciencellm.openai.azure.com/",
-    openai_api_key="SUA_CHAVE_AQUI", # Recomendado: mssparkutils.credentials.getSecret(...)
+    openai_api_key="SUA_CHAVE_AQUI",
     openai_api_version="2024-12-01-preview",
     deployment_name="gpt-4",
     temperature=0.0
 )
 
 # 2. Inicializar o Auditor
-# Passamos o cliente LLM diretamente para o auditor
 auditor = FabricAuditor(llm_client=llm_model)
 
-# (Opcional) Verifica o que será enviado ao modelo
-print("👁️ Input do Modelo:")
-print(auditor.get_model_input())
-
-# Executa a auditoria
-print("\n🔍 Auditoria:")
+# 3. Executar
 display(Markdown(auditor.audit_code()))
-
-# Gera o resumo
-print("\n📝 Resumo:")
-display(Markdown(auditor.summarize_notebook()))
 ```
 
-## ⚙️ Como Funciona (Por Baixo do Capô)
+---
 
-1. **Inicialização**: O `FabricAuditor` recebe seu cliente LLM configurado.
-2. **Extração**:
-   * O auditor tenta identificar o ID do Workspace e do Notebook atuais.
-   * Ele chama a API `POST /getDefinition` do Fabric.
-   * Se a API demorar (status 202), ele aguarda.
-   * Se a API falhar, ele varre a variável global `In` do Python para pegar as células executadas.
-3. **Limpeza**: O código bruto passa por uma série de Regex para remover códigos de infraestrutura que não interessam ao LLM.
-4. **Análise**: O código limpo é enviado ao LLM com um System Prompt especializado (Auditor de Segurança ou Resumidor).
+## 🛡️ Segurança e Privacidade
 
-## 🛡️ Segurança
-
-* A biblioteca possui um mecanismo de **Auto-Exclusão**: ela ignora células que contenham seu próprio código de chamada para evitar loops ou alucinações sobre o próprio auditor.
-* Chaves que seguem o padrão `sk-...` são mascaradas automaticamente antes do envio.
+* **Auto-Exclusão**: A biblioteca ignora células que contenham seu próprio código para evitar loops.
+* **Redação de Dados**: Chaves de API (`sk-...`) são mascaradas antes do envio.
 
 ---
+
+## 🤝 Contribuição
+
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar Pull Requests.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 **Desenvolvido para Data Engineering Moderno no Microsoft Fabric.**
