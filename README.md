@@ -28,9 +28,16 @@
 
 Como esta biblioteca está em desenvolvimento ou hospedada em repositório Git, você pode instalá-la diretamente no seu ambiente.
 
-#### Opção 1: Instalação Direta via Session (Notebook)
+```python
+# Instalação via PyPI (Versão Estável)
+%pip install fabric-auditor
+```
 
-Você pode instalar diretamente na sessão do notebook usando `%pip`.
+**Link do Projeto no PyPI:** [https://pypi.org/project/fabric-auditor/](https://pypi.org/project/fabric-auditor/)
+
+#### Opção 2: Instalação via Git (Versão de Desenvolvimento)
+
+Você pode instalar diretamente na sessão do notebook usando `%pip` apontando para o seu repositório.
 
 ```python
 # Repositório Público

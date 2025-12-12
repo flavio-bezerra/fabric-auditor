@@ -1,14 +1,189 @@
 Metadata-Version: 2.4
 Name: fabric_auditor
-Version: 0.1.2
-Summary: Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs.
-Author: Seu Nome
+Version: 0.1.2.1
+Summary: Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs com uma visão de Engenharia de Dados.
+Author-email: Flavio Bezerra <flavio.bezerra@example.com>
+License: MIT License
+        
+        Copyright (c) 2024 Flavio Bezerra
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/flavio-bezerra/fabric-auditor
+Project-URL: Bug Tracker, https://github.com/flavio-bezerra/fabric-auditor/issues
+Keywords: microsoft fabric,auditor,llm,notebooks,azure
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: requests
 Requires-Dist: openai==1.51.0
 Requires-Dist: pydantic==2.12.2
 Requires-Dist: httpx==0.27.2
 Requires-Dist: azure-identity
 Requires-Dist: azure-keyvault-secrets
-Dynamic: author
-Dynamic: requires-dist
-Dynamic: summary
+Dynamic: license-file
+
+# Fabric Auditor 🕵️‍♂️📊
+
+[![Python Version](https://img.shields.io/pypi/pyversions/fabric-auditor)](https://pypi.org/project/fabric-auditor/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+**Fabric Auditor** é uma biblioteca Python projetada especificamente para rodar dentro de **Microsoft Fabric Notebooks**. Ela extrai automaticamente o código do notebook atual, limpa "ruídos" (como boilerplate do Spark e comando mágicos), e envia o código limpo para um Modelo de Linguagem (LLM) para auditoria de segurança, performance ou sumarização.
+
+---
+
+## 🚀 Funcionalidades
+
+* **Extração Híbrida "Fail-Safe"**: Tenta obter o código via API do Fabric (mais preciso). Se falhar ou demorar, faz fallback automático para a memória da sessão (IPython history).
+* **Limpeza Inteligente**: Remove automaticamente:
+  * Cabeçalhos de licença Apache.
+  * Blocos de inicialização do Spark (`init_spark`).
+  * Configurações de `sc.setJobGroup`.
+  * Comandos mágicos (`%time`, `%pip`).
+  * **Redação de Segredos**: Mascara automaticamente chaves de API (ex: `sk-...`) antes de enviar ao LLM.
+* **Visualização de Input**: Permite inspecionar exatamente o que será enviado para o modelo (o código limpo), garantindo transparência no que está sendo auditado.
+* **Agnóstico a LLM**: Projetado para funcionar com qualquer modelo compatível com **LangChain** (Azure OpenAI, OpenAI, Ollama, etc.).
+
+---
+
+## 📦 Instalação
+
+### Instalação no Microsoft Fabric
+
+Como esta biblioteca está em desenvolvimento ou hospedada em repositório Git, você pode instalá-la diretamente no seu ambiente.
+
+```python
+# Instalação via PyPI (Versão Estável)
+%pip install fabric-auditor
+```
+
+**Link do Projeto no PyPI:** [https://pypi.org/project/fabric-auditor/](https://pypi.org/project/fabric-auditor/)
+
+#### Opção 2: Instalação via Git (Versão de Desenvolvimento)
+
+Você pode instalar diretamente na sessão do notebook usando `%pip` apontando para o seu repositório.
+
+```python
+# Repositório Público
+%pip install git+https://github.com/flavio-bezerra/fabric-auditor.git
+```
+
+```python
+# Repositório Privado (com Token)
+%pip install git+https://SEU_TOKEN@github.com/flavio-bezerra/fabric-auditor.git
+```
+
+#### Opção 2: Instalação via Environment (Recomendado para Produção)
+
+Para disponibilizar a biblioteca em todos os notebooks de um Workspace:
+
+1. No Microsoft Fabric, vá em **Manage environments**.
+2. Na seção **Public Libraries**, adicione as dependências: `langchain`, `openai`.
+3. Para a biblioteca `fabric_auditor`:
+   * **Upload do Wheel**: Gere o `.whl` localmente com `python -m build` e faça upload na aba **Custom Libraries**.
+   * **PyPI**: Se publicada, adicione `fabric-auditor` nas Public Libraries.
+4. Publique o ambiente e anexe-o ao seu Notebook.
+
+---
+
+## 🛠️ Uso Rápido (Configuração Automática)
+
+Se você já possui o ambiente configurado com o arquivo de credenciais padrão, a biblioteca se configura automaticamente:
+
+```python
+from fabric_auditor import FabricAuditor
+from IPython.display import display, Markdown
+
+# Inicializa sem argumentos -> Tenta ler JSON e KeyVault automaticamente
+auditor = FabricAuditor()
+
+# (Opcional) Verifica o que será enviado ao modelo
+print("👁️ Input do Modelo:")
+print(auditor.get_model_input())
+
+# Executa a auditoria
+print("\n🔍 Auditoria:")
+display(Markdown(auditor.audit_code()))
+
+# Gera o resumo
+print("\n📝 Resumo Resumo:")
+display(Markdown(auditor.summarize_notebook()))
+```
+
+### Pré-requisitos para Uso Automático
+
+1. Um arquivo JSON em: `{notebookutils.nbResPath}/env/CS_API_REST_LOGIN.json` com o formato:
+   ```json
+   {
+       "tenant_id": "...",
+       "client_id": "...",
+       "client_secret": "..."
+   }
+   ```
+2. Bibliotecas `azure-identity` e `azure-keyvault-secrets` instaladas.
+
+---
+
+## ⚙️ Configuração Manual (Custom LLM)
+
+Exemplo configurando o modelo manualmente (usando Azure OpenAI):
+
+```python
+from fabric_auditor import FabricAuditor
+from IPython.display import display, Markdown
+from langchain.chat_models import AzureChatOpenAI
+
+# 1. Configuração do Modelo
+llm_model = AzureChatOpenAI(
+    openai_api_base="https://datasciencellm.openai.azure.com/",
+    openai_api_key="SUA_CHAVE_AQUI",
+    openai_api_version="2024-12-01-preview",
+    deployment_name="gpt-4",
+    temperature=0.0
+)
+
+# 2. Inicializar o Auditor
+auditor = FabricAuditor(llm_client=llm_model)
+
+# 3. Executar
+display(Markdown(auditor.audit_code()))
+```
+
+---
+
+## 🛡️ Segurança e Privacidade
+
+* **Auto-Exclusão**: A biblioteca ignora células que contenham seu próprio código para evitar loops.
+* **Redação de Dados**: Chaves de API (`sk-...`) são mascaradas antes do envio.
+
+---
+
+## 🤝 Contribuição
+
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar Pull Requests.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+**Desenvolvido para Data Engineering Moderno no Microsoft Fabric.**

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabric_auditor"
-version = "0.1.2"
-description = "Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs."
+version = "0.1.2.1"
+description = "Uma biblioteca para auditar e resumir Notebooks do Microsoft Fabric usando LLMs com uma visão de Engenharia de Dados."
 readme = "README.md"
 authors = [
   { name = "Flavio Bezerra", email = "flavio.bezerra@example.com" },
